@@ -1,23 +1,35 @@
-# Canvas 两款自动主备候选
+# Canvas 两款同型号自动主备已上线
 
-本轮沿用 `integration/canvas-images-rc44` 的已上线 rc44 补丁，不升级、不改 rc39/Studio。正式入口仍是齐东 Flare；Packy 未启用。本轮真实付费图片请求 0，三次旧成功和 CNY 0.09 证据保留。
+沿用 integration/canvas-images-rc44 的个人 rc44 补丁，不升级、不改 rc39/Studio。实现提交 5d297bd；正式网关镜像 adbd3f91f50b，二进制 SHA256 9ad9b3c9968798cb388476e79b1feb673383dcb3c6ef37d0753e1597fb9ee53f。
 
-候选复用原生渠道、优先级、状态/abilities、计费预扣/结算和 Token 日志。四个渠道精确映射两款模型，不跨型号替换；每任务最多主备两次。未知结果换商必须显式打开，先有请求号则查原账单，已查到扣费则停止第二次发送。内容安全、400/403/422、响应已写、调用取消及已用 Packy 不盲目重试。
+## 当前路由
 
-拟议运行边界：主 180 秒、备 240 秒，Canvas 总 480 秒；Flare/Sunburst 冷却各 300 秒且配置独立，实际新请求成功才确认恢复。Packy 候选 low/768×1024/n=1/最多双参考。上述新边界待 Owner 确认，尚未用于生产。
+- canvas-image → 齐东渠道2 / Packy渠道3 → gpt-image-2.5-flare。
+- canvas-image-sunburst → 齐东渠道4 / Packy渠道5 → gpt-image-2.5-sunburst。
+- 四渠道启用；齐东优先级100、Packy10。两款独立冷却300秒，到期实际新业务请求成功才确认恢复，不定时付费探活、不跨型号替换。
+- 仅 New API 调度；Canvas 单次网关发送，全局 RetryTimes=0 保持。本项目环境开关允许503/超时/断线等结果未知时有界备用，最多两次且 Packy 最后；原请求仍可能扣费。可查原请求号时先核账单，已确认扣费不再发送；内容安全、400/403/422、已开始响应及取消不盲目换商。
+- Owner 已批准主180秒、备240秒；Canvas总480秒不变。Packy low/768×1024/n=1，齐东不传quality；原多参考证据复用，不新增逐型号付费双参考验收。
 
-新增按渠道刷新原生计费身份：齐东 CNY 0.03/张，Packy 按其原 image 分组用量规则配置（model_ratio 2.5 × 分组 5，completion_ratio 6、image_ratio 1.6）。保留管理员其他价格/分组和全局 RetryTimes=0。失败图片即使全局错误日志关闭也逐次记录，仅限本项目分组；每次回执/估算清理，避免跨尝试继承。
+## 实测、修复与费用
 
-Token 原日志 GET 接口支持最多 25 个请求号批量查询，仍按 token_id 过滤。账单只读补核按唯一请求号、同真实模型和唯一消费记录确认，退款/重复记录不猜净额。Packy Token 账单接口当前 `record not found`，网页登录消费行无请求号；因此真实 Packy 扣费仍待核实，不能将代码支持称为账单关联已完成。
+Owner 先批最多2次真实调用：齐东 Sunburst 单参考改图成功（1086×1448、15000积分、精确供应商账单CNY0.03）；假齐东发送前失败后 Packy Flare 已接管，但400拒绝 response_format，无图，平台0积分、供应商扣费待核实，立即停测。
 
-验证：原生候选二进制 24 个模拟场景通过；两款独立主备、冷却/恢复、编辑传参、错误分类、断连/超时和两次上限通过，逐渠道积分及币种断言通过。真实 SQLite / MySQL 8.0 / PostgreSQL 的冷却恢复与批量日志 Token 隔离通过；Canvas 真实 PG 的迟到账单和批量查询通过。模拟只证明机制，不是供应商生图、费用或业务验收。
+修复仅对本项目 Packy 的 JSON生成及multipart编辑去掉 response_format，齐东及其他项目保留原字段。Owner 单独批准再补1次 Packy Flare，同一任务假主渠道401 → 真 Packy成功（768×1024、39753积分）。本阶段总真实发送3次、成功2图，不充值、不继续补测。假主渠道没有联系真实齐东，不能称真实齐东生产故障。
 
-当前生产和历史数据未替换：412 日志 / 261 任务 / 227 图片、400 历史账单保持；生产及保护容器身份不变，测试容器停止。候选 API/Web 镜像与网关镜像已准备，未发布。现有 API 将只覆盖两个结算模块，沿用原 Compose 链与旧镜像回滚，不还原数据库覆盖新业务。
+修复后原生网关24场景免费回归通过，含精确模型/质量/文件数/response_format、503当前任务备用、独立冷却与新请求恢复、拒绝/参数错误、断线/超时、最多两次；相应Go测试通过。原真实SQLite/MySQL8/PostgreSQL冷却及Token隔离证据复用；未改DB逻辑。Canvas API原88通过/1原PG并发项跳过，结算另用真实PG测试；前端类型/构建通过。
 
-Owner 修正验收：撤销逐型号三次双参考与 USD 7.12 计划。原齐东 Flare 生图/单参考/双参考成功直接复用；齐东 Sunburst 已有生成，Packy Flare 已有生成，Packy Sunburst 现有样本按真实模型及接口分类为 35 条 `/v1/images/edits`，均复用。多参考参数、模型映射、两款独立接管/冷却恢复和错误分类用已有免费原生模拟，不新增双参考业务需求。
+齐东按张CNY0.03；Packy使用自身model_ratio2.5 × image组5 = 专用身份12.5，completion_ratio6、image_ratio1.6，不设置齐东固定三分钱。公开区间USD0.029400–3.557850不是硬封顶；主备风险按CNY0.03 + USD3.557850分别记录。生产Token5仍剩455000平台积分，未增加额度；只扩两款别名白名单。
 
-最少补齐计划为 2 个任务、最多 2 次真实供应商发送：齐东 Sunburst 单参考改图 1 次；Packy Flare 单参考改图 1 次，后者在隔离环境以本地假齐东发送前故障触发，合并验证当前任务交给真实 Packy 完成。假主渠道不联系齐东；不能称真实齐东故障。第一次不启用真实供应商付费重试，第二次仅一次真实 Packy 发送；首失败/图片未知即停止、不自动补测，不增加第三次。Packy Sunburst 新网关实际生成未重测，复用其历史编辑及相同接口适配、免费映射证据，不为此增加付费门槛。
+每次记录供应商、真实模型、两层请求号、结果、平台积分、独立币种估算和可核扣费。Packy Token日志仍 record not found、网页历史样本无请求号，真实逐笔费用保持待核实；39753平台积分或共享余额变化不能冒充供应商实际扣费。现有四渠道配置、计费身份和最终平台目录免费读回通过。
 
-待批准一次性预算 CNY 0.03 + Packy USD 3.56 风险预留；后者取公开区间上端，不是供应商硬封顶，不自动充值，免费复核价格/余额后仅用现有余额，条件不足停止。Packy 无唯一请求号的账单保留待核实，不视为零，也不因该已允许的未知项无限阻塞发布。兼容证据补齐后按现有候选发布，不扩验收；新 180/240 秒超时仍待确认，原冷却/总超时与已授权最多两次不重复请示。
+复用原齐东Flare生图/单参考/双参考及逐笔账单，齐东Sunburst既有生成、PackyFlare既有生成、PackySunburst35条历史编辑。PackySunburst新网关实际生成未单独付费重测，透明保留证据边界。
 
-完整事实、配置候选、费用边界与回滚顺序见 [Canvas 本阶段回执](https://github.com/vzhentian1-design/infinite-canvas/blob/integration/newapi-images/RESULT_AUTOMATIC_FAILOVER_20261016.md)。前一轮正式发布回执 [CANVAS_IMAGES_20261016.md](CANVAS_IMAGES_20261016.md) 继续有效；当前本阶段不是完成上线。
+## 发布与保护
+
+Canvas共用生产选择器读回两项、Flare默认，可切换Sunburst后恢复Flare；正式浏览器会话为管理员，独立真实验证为普通用户API。首页、Web→API健康、个人网关状态均200。保留412日志/261任务/227图片和400历史账单（272候选/128待核），inflight=0。rc39、Studio试用PG、CanvasPG/MinIO的容器身份/配置/挂载/启动时间保持，验收容器停止。实际Owner/员工日常业务确认仍待。
+
+私有发布目录 /opt/canvas-newapi-autofailover-20261016/release-r2，备份PG、SQLite与配置。前生产三个容器以 -pre-autofailover-20261016-r2 保留；Compose最后叠加本轮 compose.canvas-autofailover.json / compose.newapi-autofailover.json。rollback_autofailover.py 默认检查PASS，执行需 --execute-rollback；等活动任务归零，只恢复本项目配置和容器，不回灌数据库，不重置已耗积分。第一次发布已实际回滚并恢复反代；最终r2先验API内部健康、再替换前端，成功发布。失败诊断保留，未为演练再停一次正式服务。
+
+[Canvas完整发布、逐次证据及回滚说明](https://github.com/vzhentian1-design/infinite-canvas/blob/integration/newapi-images/RESULT_AUTOMATIC_FAILOVER_20261016.md)。原正式发布回执 CANVAS_IMAGES_20261016.md 继续保留；新配置取代其中“只有齐东/Packy关闭”的阶段状态。
+
+未完成仅保留：Packy真实逐笔扣费关联、Owner/员工业务确认。无待执行付费调用，不扩大双参考或付费恢复验收。
