@@ -41,14 +41,25 @@ func ImageHelper(c *gin.Context, info *relaycommon.RelayInfo) (newAPIError *type
 		return types.NewError(err, types.ErrorCodeChannelModelMappedError, types.ErrOptionWithSkipRetry())
 	}
 	if service.IsCanvasImageRequest(c) {
+		// Per-attempt identity must never inherit the previous supplier's receipt.
+		c.Set(common.UpstreamRequestIdKey, "")
+		c.Set("canvas_supplier_charge", nil)
+		c.Set("canvas_supplier_model", request.Model)
+		c.Set("canvas_supplier_estimate", nil)
+		name := c.GetString("channel_name")
 		if imageReq.Size != "768x1024" || (imageReq.N != nil && *imageReq.N != 1) || len(imageReq.Prompt) > 8000 {
 			return types.NewErrorWithStatusCode(errors.New("Canvas image profile requires n=1, size=768x1024 and prompt <=8000 bytes"), types.ErrorCodeInvalidRequest, http.StatusBadRequest, types.ErrOptionWithSkipRetry())
 		}
 		switch request.Model {
-		case "gpt-image-2.5-flare":
-			request.Quality = ""
-		case "gpt-image-2":
-			request.Quality = "low"
+		case "gpt-image-2.5-flare", "gpt-image-2.5-sunburst":
+			if (imageReq.Model == "canvas-image-sunburst") != (request.Model == "gpt-image-2.5-sunburst") {
+				return types.NewErrorWithStatusCode(errors.New("Canvas model variants cannot be interchanged"), types.ErrorCodeInvalidRequest, http.StatusBadRequest, types.ErrOptionWithSkipRetry())
+			}
+			if strings.HasPrefix(name, "canvas-packy-") {
+				request.Quality = "low"
+			} else {
+				request.Quality = ""
+			}
 		default:
 			return types.NewErrorWithStatusCode(errors.New("Canvas image provider model is not approved"), types.ErrorCodeInvalidRequest, http.StatusBadRequest, types.ErrOptionWithSkipRetry())
 		}
@@ -62,6 +73,21 @@ func ImageHelper(c *gin.Context, info *relaycommon.RelayInfo) (newAPIError *type
 			if count > 2 {
 				return types.NewErrorWithStatusCode(errors.New("Canvas image profile allows at most two references"), types.ErrorCodeInvalidRequest, http.StatusBadRequest, types.ErrOptionWithSkipRetry())
 			}
+		}
+		// Native pricing/reservation is refreshed for the selected supplier.
+		// Administrator-configured billing identities keep USD token pricing
+		// distinct from Qidong's per-image CNY estimate.
+		switch name {
+		case "canvas-qidong-flare", "canvas-qidong-sunburst", "canvas-packy-flare", "canvas-packy-sunburst":
+			info.BillingModelName = name
+			if _, err := helper.ModelPriceHelper(c, info, info.GetEstimatePromptTokens(), imageReq.GetTokenCountMeta()); err != nil {
+				return types.NewErrorWithStatusCode(err, types.ErrorCodeModelPriceError, http.StatusBadRequest, types.ErrOptionWithSkipRetry())
+			}
+		}
+		if strings.HasPrefix(name, "canvas-qidong-") {
+			c.Set("canvas_supplier_estimate", map[string]any{"amount": "0.030000", "currency": "CNY", "source": "https://api.qidong.autos/api/pricing", "basis": "per_image", "actual_status": "pending_verification"})
+		} else if strings.HasPrefix(name, "canvas-packy-") {
+			c.Set("canvas_supplier_estimate", map[string]any{"amount": nil, "currency": "USD", "source": "https://www.packyapi.com/api/pricing", "basis": "usage_dependent", "min": "0.029400", "max": "3.557850", "range_is_hard_cap": false, "actual_status": "pending_verification"})
 		}
 	}
 
@@ -78,7 +104,7 @@ func ImageHelper(c *gin.Context, info *relaycommon.RelayInfo) (newAPIError *type
 	var requestBody io.Reader
 	var jsonData []byte
 
-	if model_setting.GetGlobalSettings().PassThroughRequestEnabled || info.ChannelSetting.PassThroughBodyEnabled {
+	if !service.IsCanvasImageRequest(c) && (model_setting.GetGlobalSettings().PassThroughRequestEnabled || info.ChannelSetting.PassThroughBodyEnabled) {
 		storage, err := common.GetBodyStorage(c)
 		if err != nil {
 			return types.NewErrorWithStatusCode(err, types.ErrorCodeReadRequestBodyFailed, http.StatusBadRequest, types.ErrOptionWithSkipRetry())
@@ -128,10 +154,16 @@ func ImageHelper(c *gin.Context, info *relaycommon.RelayInfo) (newAPIError *type
 		// This is a different trust boundary from ingress: channel overrides
 		// and pass-through bodies can change the quantity actually submitted.
 		var outbound struct {
-			N *uint `json:"n"`
+			N       *uint  `json:"n"`
+			Model   string `json:"model"`
+			Size    string `json:"size"`
+			Quality string `json:"quality"`
 		}
 		if err := common.Unmarshal(jsonData, &outbound); err != nil {
 			return types.NewErrorWithStatusCode(fmt.Errorf("invalid image billing parameters: %w", err), types.ErrorCodeInvalidRequest, http.StatusBadRequest, types.ErrOptionWithSkipRetry())
+		}
+		if service.IsCanvasImageRequest(c) && (outbound.N == nil || *outbound.N != 1 || outbound.Model != request.Model || outbound.Size != "768x1024" || outbound.Quality != request.Quality) {
+			return types.NewErrorWithStatusCode(errors.New("Canvas outbound image profile cannot be overridden"), types.ErrorCodeInvalidRequest, http.StatusBadRequest, types.ErrOptionWithSkipRetry())
 		}
 		quantityRequest := dto.ImageRequest{N: outbound.N}
 		if quantityRequest.N == nil {

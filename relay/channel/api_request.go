@@ -531,6 +531,14 @@ func doRequest(c *gin.Context, req *http.Request, info *common.RelayInfo) (*http
 	// transparent stream retries.
 	relayClient := *client
 	relayClient.CheckRedirect = keepUpstreamRedirectResponse
+	if service.IsCanvasImageRequest(c) {
+		// Bound the entire supplier response, including body reads, while
+		// leaving the Canvas gateway's 480-second deadline room for backup.
+		attemptTimeout := service.CanvasImageAttemptTimeout(c)
+		if relayClient.Timeout == 0 || relayClient.Timeout > attemptTimeout {
+			relayClient.Timeout = attemptTimeout
+		}
+	}
 	if common2.DebugEnabled && req != nil && req.URL != nil {
 		policy := service.NormalizeHTTPTransportPolicy(info.ChannelSetting)
 		logger.LogDebug(c, "http transport select: host=%s protocol=%s shards=%d policy=%s",

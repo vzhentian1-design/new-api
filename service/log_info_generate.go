@@ -75,7 +75,12 @@ func AppendRelayLogAdminInfo(ctx *gin.Context, relayInfo *relaycommon.RelayInfo,
 			other.SetPublic("canvas_task_id", taskID)
 		}
 		other.SetPublic("image_supplier", ctx.GetString("channel_name"))
-		if charge, ok := ctx.Get("canvas_supplier_charge"); ok {
+		other.SetPublic("image_attempt", RequestPolicy(ctx).Attempts)
+		other.SetPublic("upstream_model_name", ctx.GetString("canvas_supplier_model"))
+		if estimate, ok := ctx.Get("canvas_supplier_estimate"); ok && estimate != nil {
+			other.SetPublic("supplier_estimate", estimate)
+		}
+		if charge, ok := ctx.Get("canvas_supplier_charge"); ok && charge != nil {
 			other.SetPublic("supplier_charge", charge)
 		}
 	}

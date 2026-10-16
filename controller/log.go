@@ -185,12 +185,18 @@ func GetLogByKey(c *gin.Context) {
 		common.ApiErrorI18n(c, i18n.MsgTokenInvalid)
 		return
 	}
-	requestID := c.Query("request_id")
-	if len(requestID) > 64 {
-		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "Invalid request ID"})
+	requestIDs := c.QueryArray("request_id")
+	if len(requestIDs) > 25 {
+		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "Too many request IDs"})
 		return
 	}
-	logs, err := model.GetLogByTokenId(tokenId, requestID)
+	for _, requestID := range requestIDs {
+		if len(requestID) > 64 || requestID == "" {
+			c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "Invalid request ID"})
+			return
+		}
+	}
+	logs, err := model.GetLogByTokenId(tokenId, requestIDs...)
 	if err != nil {
 		c.JSON(200, gin.H{
 			"success": false,
@@ -198,6 +204,7 @@ func GetLogByKey(c *gin.Context) {
 		})
 		return
 	}
+	service.RefreshCanvasImageSupplierBills(c, logs)
 	c.JSON(200, gin.H{
 		"success": true,
 		"message": "",

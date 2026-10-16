@@ -142,7 +142,7 @@ func GetLogByTokenId(tokenId int, requestIDs ...string) (logs []*Log, err error)
 	}
 	query := LOG_DB.Model(&Log{}).Where("token_id = ?", tokenId)
 	if len(requestIDs) > 0 && requestIDs[0] != "" {
-		query = query.Where("request_id = ?", requestIDs[0])
+		query = query.Where("request_id IN ?", requestIDs)
 	}
 	err = query.Order(order).Limit(common.MaxRecentItems).Find(&logs).Error
 	formatUserLogs(logs, 0)
