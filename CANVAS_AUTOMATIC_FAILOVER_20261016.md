@@ -14,6 +14,6 @@ Token 原日志 GET 接口支持最多 25 个请求号批量查询，仍按 toke
 
 当前生产和历史数据未替换：412 日志 / 261 任务 / 227 图片、400 历史账单保持；生产及保护容器身份不变，测试容器停止。候选 API/Web 镜像与网关镜像已准备，未发布。现有 API 将只覆盖两个结算模块，沿用原 Compose 链与旧镜像回滚，不还原数据库覆盖新业务。
 
-待批准的最小付费验证：齐东 Sunburst 双参考 1 次、Packy Flare/Sunburst 各双参考 1 次，共最多 3 次；CNY 0.03，Packy 预计 USD 0.10–0.30、公开区间上端预留 USD 7.12。供应商单请求硬封顶未核实；不自动充值、首失败/未知即停止，不挪旧预算。批准后才建限额验证凭据、做实际验证及安全发布。
+待批准的最小付费验证：齐东 Sunburst 双参考 1 次、Packy Flare/Sunburst 各双参考 1 次，共最多 3 次；CNY 0.03，Packy 预计 USD 0.10–0.30、公开区间上端预留 USD 7.12。供应商单请求硬封顶未核实；不自动充值、首失败或图片结果未知即停止，不挪旧预算。账单无法唯一关联则单独待核实，不视为 0。批准后才建限额验证凭据、做实际验证及安全发布。
 
 完整事实、配置候选、费用边界与回滚顺序见 [Canvas 本阶段回执](https://github.com/vzhentian1-design/infinite-canvas/blob/integration/newapi-images/RESULT_AUTOMATIC_FAILOVER_20261016.md)。前一轮正式发布回执 [CANVAS_IMAGES_20261016.md](CANVAS_IMAGES_20261016.md) 继续有效；当前本阶段不是完成上线。
