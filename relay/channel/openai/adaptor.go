@@ -518,6 +518,12 @@ func (a *Adaptor) ConvertAudioRequest(c *gin.Context, info *relaycommon.RelayInf
 }
 
 func (a *Adaptor) ConvertImageRequest(c *gin.Context, info *relaycommon.RelayInfo, request dto.ImageRequest) (any, error) {
+	// Packy's 2.5 image API rejects the legacy response_format field. Its
+	// default image payload is handled by the existing response parser.
+	packyImage := service.IsCanvasImageRequest(c) && strings.HasPrefix(c.GetString("channel_name"), "canvas-packy-")
+	if packyImage {
+		request.ResponseFormat = ""
+	}
 	switch info.RelayMode {
 	case relayconstant.RelayModeImagesEdits:
 		if isJSONRequest(c) {
@@ -546,6 +552,9 @@ func (a *Adaptor) ConvertImageRequest(c *gin.Context, info *relaycommon.RelayInf
 		// 写入所有非文件字段
 		if mf != nil {
 			for key, values := range mf.Value {
+				if packyImage && key == "response_format" {
+					continue
+				}
 				if key == "model" {
 					continue
 				}

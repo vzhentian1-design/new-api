@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/QuantumNous/new-api/common"
+	"github.com/QuantumNous/new-api/constant"
 	relaycommon "github.com/QuantumNous/new-api/relay/common"
 	relayconstant "github.com/QuantumNous/new-api/relay/constant"
 	"github.com/QuantumNous/new-api/relaykit/dto"
@@ -95,4 +96,48 @@ func TestConvertImageEditRequestMultipart(t *testing.T) {
 
 		convertAndReplay(t, c, prompt)
 	})
+}
+
+func TestCanvasPackyImageOmitsUnsupportedResponseFormat(t *testing.T) {
+	t.Setenv("CANVAS_IMAGE_ROUTING_ENABLED", "true")
+	for _, channel := range []string{"canvas-packy-flare", "canvas-packy-sunburst", "canvas-qidong-flare", "unrelated"} {
+		t.Run(channel, func(t *testing.T) {
+			for _, mode := range []int{relayconstant.RelayModeImagesGenerations, relayconstant.RelayModeImagesEdits} {
+				var body bytes.Buffer
+				writer := multipart.NewWriter(&body)
+				require.NoError(t, writer.WriteField("response_format", "b64_json"))
+				require.NoError(t, writer.WriteField("prompt", "edit"))
+				part, err := writer.CreateFormFile("image", "ref.png")
+				require.NoError(t, err)
+				_, err = part.Write([]byte("reference bytes"))
+				require.NoError(t, err)
+				require.NoError(t, writer.Close())
+				c, _ := gin.CreateTestContext(httptest.NewRecorder())
+				path := "/v1/images/generations"
+				if mode == relayconstant.RelayModeImagesEdits {
+					path = "/v1/images/edits"
+				}
+				c.Request = httptest.NewRequest(http.MethodPost, path, &body)
+				c.Request.Header.Set("Content-Type", writer.FormDataContentType())
+				require.NoError(t, c.Request.ParseMultipartForm(32<<20))
+				common.SetContextKey(c, constant.ContextKeyUsingGroup, "canvas-image")
+				c.Set("channel_name", channel)
+				converted, err := (&Adaptor{}).ConvertImageRequest(c, &relaycommon.RelayInfo{RelayMode: mode}, dto.ImageRequest{Model: "gpt-image-2.5-flare", Prompt: "edit", ResponseFormat: "b64_json"})
+				require.NoError(t, err)
+				expected := "b64_json"
+				if channel == "canvas-packy-flare" || channel == "canvas-packy-sunburst" {
+					expected = ""
+				}
+				if mode == relayconstant.RelayModeImagesGenerations {
+					require.Equal(t, expected, converted.(dto.ImageRequest).ResponseFormat)
+				} else {
+					replayed := httptest.NewRequest(http.MethodPost, path, converted.(*bytes.Buffer))
+					replayed.Header.Set("Content-Type", c.Request.Header.Get("Content-Type"))
+					require.NoError(t, replayed.ParseMultipartForm(32<<20))
+					require.Equal(t, expected, replayed.PostForm.Get("response_format"))
+					require.Len(t, replayed.MultipartForm.File["image"], 1)
+				}
+			}
+		})
+	}
 }
