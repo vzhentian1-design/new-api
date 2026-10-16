@@ -90,7 +90,7 @@ func fetchCanvasImageSupplierBills(ctx context.Context, name, key string) *canva
 	switch name {
 	case "canvas-qidong-flare", "canvas-qidong-sunburst":
 		source, currency = "https://api.qidong.autos/api/log/token", "CNY"
-	case "canvas-packy-flare", "canvas-packy-sunburst":
+	case "canvas-packy-flare", "canvas-packy-sunburst", "canvas-packy-image2":
 		source, currency = "https://www.packyapi.com/api/log/token", "USD"
 	default:
 		return nil
@@ -125,7 +125,7 @@ func fetchCanvasImageSupplierBills(ctx context.Context, name, key string) *canva
 }
 
 func (result *canvasSupplierBills) find(id, upstreamModel string) map[string]any {
-	if result == nil || id == "" || (upstreamModel != "gpt-image-2.5-flare" && upstreamModel != "gpt-image-2.5-sunburst") {
+	if result == nil || id == "" || (upstreamModel != "gpt-image-2.5-flare" && upstreamModel != "gpt-image-2.5-sunburst" && upstreamModel != "gpt-image-2") {
 		return nil
 	}
 	matched := 0
@@ -147,6 +147,21 @@ func (result *canvasSupplierBills) find(id, upstreamModel string) map[string]any
 
 const CanvasImageGroup = "canvas-image"
 const canvasImageCooldownReason = "canvas_image_cooldown"
+
+// Public catalog IDs and the two historical aliases resolve to exact variants.
+// Image 2 has only Packy; a mapping error cannot silently substitute a 2.5 model.
+func CanvasImageModelAllowed(requested, upstream, channel string) bool {
+	switch requested {
+	case "canvas-image", "gpt-image-2.5-flare":
+		return upstream == "gpt-image-2.5-flare" && (channel == "canvas-qidong-flare" || channel == "canvas-packy-flare")
+	case "canvas-image-sunburst", "gpt-image-2.5-sunburst":
+		return upstream == "gpt-image-2.5-sunburst" && (channel == "canvas-qidong-sunburst" || channel == "canvas-packy-sunburst")
+	case "gpt-image-2":
+		return upstream == "gpt-image-2" && channel == "canvas-packy-image2"
+	default:
+		return false
+	}
+}
 
 func CanvasImageAttemptTimeout(c *gin.Context) time.Duration {
 	variable, fallback := "CANVAS_IMAGE_PRIMARY_TIMEOUT_SECONDS", 180

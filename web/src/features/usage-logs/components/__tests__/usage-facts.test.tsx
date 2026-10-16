@@ -94,6 +94,23 @@ function rowValue(label: string): string | null {
   return screen.getByText(label).nextElementSibling?.textContent ?? null
 }
 
+test('separates platform USD from verified supplier CNY with nominal display and original currency', () => {
+  const queryClient = renderDetails({ image_supplier: 'canvas-qidong-flare', image_attempt: 1, canvas_username: 'employee1', supplier_usd_cny_rate: 7.3, supplier_charge: { status: 'verified', amount: '0.030000', currency: 'CNY', request_id: 'supplier-1', source: 'https://api.qidong.autos/api/log/token' } })
+  expect(rowValue('Canvas employee')).toBe('employee1')
+  expect(rowValue('Platform amount (USD)')).toContain('0.01')
+  expect(rowValue('Supplier amount (USD)')).toContain('0.03')
+  expect(rowValue('Original supplier bill')).toContain('CNY 0.030000')
+  expect(rowValue('Supplier debit status')).toBe('Original currency debit verified')
+  queryClient.clear()
+})
+
+test('does not invent a Packy debit when only platform quota is known', () => {
+  const queryClient = renderDetails({ image_supplier: 'canvas-packy-image2', image_attempt: 1 })
+  expect(rowValue('Supplier debit status')).toBe('Supplier actual debit pending verification')
+  expect(screen.queryByText('Supplier amount (USD)')).toBeNull()
+  queryClient.clear()
+})
+
 test('shows the recorded request and response models in log details', () => {
   const queryClient = renderDetails({
     response_model: {

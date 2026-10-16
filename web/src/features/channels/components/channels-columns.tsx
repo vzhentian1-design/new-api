@@ -993,8 +993,9 @@ export function useChannelsColumns(
               ? `${t(config.label)} (${enabledCount}/${keySize})`
               : t(config.label)
 
-          // Auto-disabled: show reason and time tooltip
-          if (status === 3) {
+          // Canvas recovery is confirmed only by a new successful business request.
+          const canvasProbe = channel.group === 'canvas-image' && channel.other_info?.includes('canvas_image_probe_pending') && status === 1
+          if (status === 3 || canvasProbe) {
             let statusReason = ''
             let statusTime = ''
             try {
@@ -1017,7 +1018,7 @@ export function useChannelsColumns(
                   <Tooltip>
                     <TooltipTrigger render={<span />}>
                       <StatusBadge
-                        label={label}
+                        label={canvasProbe ? t('Awaiting recovery confirmation') : label}
                         variant={config.variant}
                         size='sm'
                         copyable={false}

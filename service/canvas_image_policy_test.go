@@ -28,6 +28,25 @@ func canvasImageContext(t *testing.T) *gin.Context {
 	return c
 }
 
+func TestCanvasImageCatalogCannotCrossModelsOrSuppliers(t *testing.T) {
+	for _, tc := range []struct {
+		requested, upstream, channel string
+		allowed                      bool
+	}{
+		{"gpt-image-2", "gpt-image-2", "canvas-packy-image2", true},
+		{"gpt-image-2", "gpt-image-2.5-flare", "canvas-packy-flare", false},
+		{"gpt-image-2", "gpt-image-2", "canvas-qidong-flare", false},
+		{"gpt-image-2.5-flare", "gpt-image-2.5-flare", "canvas-qidong-flare", true},
+		{"gpt-image-2.5-sunburst", "gpt-image-2.5-sunburst", "canvas-packy-sunburst", true},
+		{"gpt-image-2.5-sunburst", "gpt-image-2.5-flare", "canvas-packy-flare", false},
+		{"canvas-image", "gpt-image-2.5-flare", "canvas-packy-flare", true},
+		{"canvas-image-sunburst", "gpt-image-2.5-sunburst", "canvas-qidong-sunburst", true},
+		{"unknown", "gpt-image-2.5-flare", "canvas-packy-flare", false},
+	} {
+		assert.Equal(t, tc.allowed, CanvasImageModelAllowed(tc.requested, tc.upstream, tc.channel), "%+v", tc)
+	}
+}
+
 func TestCanvasImageOptInUnknownFailoverAndRefusals(t *testing.T) {
 	t.Setenv("CANVAS_IMAGE_AMBIGUOUS_FAILOVER_ENABLED", "true")
 	for _, tc := range []struct {

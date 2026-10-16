@@ -50,18 +50,13 @@ func ImageHelper(c *gin.Context, info *relaycommon.RelayInfo) (newAPIError *type
 		if imageReq.Size != "768x1024" || (imageReq.N != nil && *imageReq.N != 1) || len(imageReq.Prompt) > 8000 {
 			return types.NewErrorWithStatusCode(errors.New("Canvas image profile requires n=1, size=768x1024 and prompt <=8000 bytes"), types.ErrorCodeInvalidRequest, http.StatusBadRequest, types.ErrOptionWithSkipRetry())
 		}
-		switch request.Model {
-		case "gpt-image-2.5-flare", "gpt-image-2.5-sunburst":
-			if (imageReq.Model == "canvas-image-sunburst") != (request.Model == "gpt-image-2.5-sunburst") {
-				return types.NewErrorWithStatusCode(errors.New("Canvas model variants cannot be interchanged"), types.ErrorCodeInvalidRequest, http.StatusBadRequest, types.ErrOptionWithSkipRetry())
-			}
-			if strings.HasPrefix(name, "canvas-packy-") {
-				request.Quality = "low"
-			} else {
-				request.Quality = ""
-			}
-		default:
+		if !service.CanvasImageModelAllowed(imageReq.Model, request.Model, name) {
 			return types.NewErrorWithStatusCode(errors.New("Canvas image provider model is not approved"), types.ErrorCodeInvalidRequest, http.StatusBadRequest, types.ErrOptionWithSkipRetry())
+		}
+		if strings.HasPrefix(name, "canvas-packy-") {
+			request.Quality = "low"
+		} else {
+			request.Quality = ""
 		}
 		if form := c.Request.MultipartForm; form != nil {
 			count := 0
@@ -78,7 +73,7 @@ func ImageHelper(c *gin.Context, info *relaycommon.RelayInfo) (newAPIError *type
 		// Administrator-configured billing identities keep USD token pricing
 		// distinct from Qidong's per-image CNY estimate.
 		switch name {
-		case "canvas-qidong-flare", "canvas-qidong-sunburst", "canvas-packy-flare", "canvas-packy-sunburst":
+		case "canvas-qidong-flare", "canvas-qidong-sunburst", "canvas-packy-flare", "canvas-packy-sunburst", "canvas-packy-image2":
 			info.BillingModelName = name
 			if _, err := helper.ModelPriceHelper(c, info, info.GetEstimatePromptTokens(), imageReq.GetTokenCountMeta()); err != nil {
 				return types.NewErrorWithStatusCode(err, types.ErrorCodeModelPriceError, http.StatusBadRequest, types.ErrOptionWithSkipRetry())

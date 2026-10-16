@@ -203,6 +203,15 @@ export interface LogOtherData {
   cache_creation_ratio_1h?: number
   is_model_mapped?: boolean
   upstream_model_name?: string
+  canvas_task_id?: string
+  canvas_user_id?: string
+  canvas_username?: string
+  image_supplier?: string
+  image_attempt?: number
+  platform_quota_per_usd?: number
+  supplier_usd_cny_rate?: number
+  supplier_charge?: { status: string; amount: string; currency: string; request_id: string; source: string }
+  supplier_estimate?: { amount: string | null; currency: string; min?: string; max?: string; source: string }
   // Diagnostic only. Whether the names disagree is derived in the UI via
   // isResponseModelMismatch so old rows follow the current comparison rule.
   response_model?: {

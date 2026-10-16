@@ -2,6 +2,7 @@ package service
 
 import (
 	"encoding/base64"
+	"net/url"
 	"strings"
 
 	"github.com/QuantumNous/new-api/common"
@@ -76,6 +77,15 @@ func AppendRelayLogAdminInfo(ctx *gin.Context, relayInfo *relaycommon.RelayInfo,
 		}
 		other.SetPublic("image_supplier", ctx.GetString("channel_name"))
 		other.SetPublic("image_attempt", RequestPolicy(ctx).Attempts)
+		other.SetPublic("platform_quota_per_usd", common.QuotaPerUnit)
+		other.SetPublic("supplier_usd_cny_rate", 1.0)
+		other.SetPublic("supplier_fx_source", "Owner display policy: 1:1 nominal USD; not FX or actual USD debit")
+		if id := ctx.GetHeader("X-Canvas-User-Id"); len(id) == 36 && !strings.ContainsAny(id, "\r\n") {
+			other.SetPublic("canvas_user_id", id)
+		}
+		if name, err := url.QueryUnescape(ctx.GetHeader("X-Canvas-Username")); err == nil && len(name) <= 128 && !strings.ContainsAny(name, "\r\n\x00") {
+			other.SetPublic("canvas_username", name)
+		}
 		other.SetPublic("upstream_model_name", ctx.GetString("canvas_supplier_model"))
 		if estimate, ok := ctx.Get("canvas_supplier_estimate"); ok && estimate != nil {
 			other.SetPublic("supplier_estimate", estimate)

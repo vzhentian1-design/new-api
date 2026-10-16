@@ -63,7 +63,7 @@ import { pluginUsageSchema } from '@/features/pricing/lib/plugin-pricing'
 import { PolicyDecisionRecord } from '@/features/system-settings/request-policies/decision-record'
 import { useCopyToClipboard } from '@/hooks/use-copy-to-clipboard'
 import { formatBillingCurrencyFromUSD } from '@/lib/currency'
-import { formatLogQuota, formatTokens, formatUseTime } from '@/lib/format'
+import { formatLogQuota, formatTokens, formatUseTime, formatNumber } from '@/lib/format'
 import { translateServerText } from '@/lib/server-error-message'
 import { cn } from '@/lib/utils'
 
@@ -481,6 +481,8 @@ export function DetailsDialog(props: DetailsDialogProps) {
   const { t } = useTranslation()
   const { copiedText, copyToClipboard } = useCopyToClipboard({ notify: false })
   const other = parseLogOther(props.log.other)
+  const supplierCharge = other?.supplier_charge
+  const supplierVerified = supplierCharge?.status === 'verified' && Number.isFinite(Number(supplierCharge.amount))
   const typeConfig = getLogTypeConfig(props.log.type)
 
   const isViolation = isViolationFeeLog(other)
@@ -1164,6 +1166,27 @@ export function DetailsDialog(props: DetailsDialogProps) {
               />
             </DetailSection>
           )}
+
+        {other?.image_supplier && (
+          <DetailSection label={t('Canvas image billing')}>
+            <DetailRow label={t('Canvas employee')} value={other.canvas_username || other.canvas_user_id || t('Not recorded')} mono />
+            <DetailRow label={t('Canvas task ID')} value={other.canvas_task_id || t('Not recorded')} mono />
+            <DetailRow label={t('Actual supplier')} value={`${other.image_supplier.startsWith('canvas-qidong-') ? t('Qidong') : 'Packy'} · ${other.image_supplier}`} />
+            <DetailRow label={t('Actual Model')} value={other.upstream_model_name || props.log.model_name} mono />
+            <DetailRow label={t('Supplier attempt')} value={`${other.image_attempt || 1} · ${/^canvas-packy-(flare|sunburst)$/.test(other.image_supplier) ? t('Automatic backup used') : t('First supplier attempt')}`} />
+            <DetailRow label={t('Platform amount (USD)')} value={`${formatBillingCurrencyFromUSD(props.log.quota / (other.platform_quota_per_usd || 500000), { digitsSmall: 6, digitsLarge: 6 })} · ${formatNumber(props.log.quota)} ${t('quota')}`} mono />
+            <DetailRow label={t('Supplier debit status')} value={supplierVerified ? t('Original currency debit verified') : t('Supplier actual debit pending verification')} />
+            {supplierVerified && supplierCharge && (
+              <>
+                <DetailRow label={t('Supplier amount (USD)')} value={`${formatBillingCurrencyFromUSD(Number(supplierCharge.amount), { digitsSmall: 6, digitsLarge: 6 })}${supplierCharge.currency === 'CNY' ? ` · ${t('Reference conversion only')}` : ''}`} mono />
+                <DetailRow label={t('Original supplier bill')} value={`${supplierCharge.currency} ${supplierCharge.amount} · ${supplierCharge.request_id}`} mono />
+                <DetailRow label={t('Evidence source')} value={supplierCharge.source} mono />
+              </>
+            )}
+            <DetailRow label={t('USD conversion reference')} value={t('Nominal USD display at 1:1; not FX or an actual USD debit. Original amount and currency are preserved.')} />
+            <DetailRow label={t('Billing note')} value={t('Platform quota is not supplier actual cost. Failed requests with zero platform quota can still have an unverified supplier charge.')} />
+          </DetailSection>
+        )}
 
         {/* Token breakdown (for consume/error types with token data) */}
         {isDisplayableType(props.log.type) && other && (

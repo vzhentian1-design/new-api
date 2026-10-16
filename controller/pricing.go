@@ -42,10 +42,12 @@ func GetPricing(c *gin.Context) {
 	groupRatio := map[string]float64{}
 	maps.Copy(groupRatio, ratio_setting.GetGroupRatioCopy())
 	var group string
+	var role int
 	if exists {
 		user, err := model.GetUserCache(userId.(int))
 		if err == nil {
 			group = user.Group
+			role = user.Role
 			for g := range groupRatio {
 				ratio, ok := ratio_setting.GetGroupGroupRatio(group, g)
 				if ok {
@@ -56,6 +58,12 @@ func GetPricing(c *gin.Context) {
 	}
 
 	usableGroup = service.GetUserUsableGroups(group)
+	// Catalog visibility only: do not change token groups or relay authorization.
+	if role >= common.RoleAdminUser {
+		if _, configured := groupRatio[service.CanvasImageGroup]; configured {
+			usableGroup[service.CanvasImageGroup] = "Canvas 图片：齐东主用 / Packy 备用"
+		}
+	}
 	pricing = filterPricingByUsableGroups(pricing, usableGroup)
 	// check groupRatio contains usableGroup
 	for group := range ratio_setting.GetGroupRatioCopy() {
