@@ -528,6 +528,9 @@ func (a *Adaptor) ConvertImageRequest(c *gin.Context, info *relaycommon.RelayInf
 		writer := multipart.NewWriter(&requestBody)
 
 		writer.WriteField("model", request.Model)
+		if service.IsCanvasImageRequest(c) && request.Quality != "" {
+			writer.WriteField("quality", request.Quality)
+		}
 		// 使用已解析的 multipart 表单，避免重复解析
 		mf := c.Request.MultipartForm
 		if mf == nil {
@@ -544,6 +547,9 @@ func (a *Adaptor) ConvertImageRequest(c *gin.Context, info *relaycommon.RelayInf
 		if mf != nil {
 			for key, values := range mf.Value {
 				if key == "model" {
+					continue
+				}
+				if service.IsCanvasImageRequest(c) && key == "quality" {
 					continue
 				}
 				for _, value := range values {

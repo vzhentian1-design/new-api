@@ -185,7 +185,12 @@ func GetLogByKey(c *gin.Context) {
 		common.ApiErrorI18n(c, i18n.MsgTokenInvalid)
 		return
 	}
-	logs, err := model.GetLogByTokenId(tokenId)
+	requestID := c.Query("request_id")
+	if len(requestID) > 64 {
+		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "Invalid request ID"})
+		return
+	}
+	logs, err := model.GetLogByTokenId(tokenId, requestID)
 	if err != nil {
 		c.JSON(200, gin.H{
 			"success": false,

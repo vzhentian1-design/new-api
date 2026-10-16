@@ -135,12 +135,16 @@ func FormatRootLogs(logs []*Log) {
 	}
 }
 
-func GetLogByTokenId(tokenId int) (logs []*Log, err error) {
+func GetLogByTokenId(tokenId int, requestIDs ...string) (logs []*Log, err error) {
 	order := "id desc"
 	if common.UsingLogDatabase(common.DatabaseTypeClickHouse) {
 		order = clickHouseLogOrder("")
 	}
-	err = LOG_DB.Model(&Log{}).Where("token_id = ?", tokenId).Order(order).Limit(common.MaxRecentItems).Find(&logs).Error
+	query := LOG_DB.Model(&Log{}).Where("token_id = ?", tokenId)
+	if len(requestIDs) > 0 && requestIDs[0] != "" {
+		query = query.Where("request_id = ?", requestIDs[0])
+	}
+	err = query.Order(order).Limit(common.MaxRecentItems).Find(&logs).Error
 	formatUserLogs(logs, 0)
 	return logs, err
 }

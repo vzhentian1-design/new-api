@@ -40,6 +40,30 @@ func ImageHelper(c *gin.Context, info *relaycommon.RelayInfo) (newAPIError *type
 	if err != nil {
 		return types.NewError(err, types.ErrorCodeChannelModelMappedError, types.ErrOptionWithSkipRetry())
 	}
+	if service.IsCanvasImageRequest(c) {
+		if imageReq.Size != "768x1024" || (imageReq.N != nil && *imageReq.N != 1) || len(imageReq.Prompt) > 8000 {
+			return types.NewErrorWithStatusCode(errors.New("Canvas image profile requires n=1, size=768x1024 and prompt <=8000 bytes"), types.ErrorCodeInvalidRequest, http.StatusBadRequest, types.ErrOptionWithSkipRetry())
+		}
+		switch request.Model {
+		case "gpt-image-2.5-flare":
+			request.Quality = ""
+		case "gpt-image-2":
+			request.Quality = "low"
+		default:
+			return types.NewErrorWithStatusCode(errors.New("Canvas image provider model is not approved"), types.ErrorCodeInvalidRequest, http.StatusBadRequest, types.ErrOptionWithSkipRetry())
+		}
+		if form := c.Request.MultipartForm; form != nil {
+			count := 0
+			for name, files := range form.File {
+				if name == "image" || strings.HasPrefix(name, "image[") {
+					count += len(files)
+				}
+			}
+			if count > 2 {
+				return types.NewErrorWithStatusCode(errors.New("Canvas image profile allows at most two references"), types.ErrorCodeInvalidRequest, http.StatusBadRequest, types.ErrOptionWithSkipRetry())
+			}
+		}
+	}
 
 	adaptor := GetAdaptor(info.ApiType)
 	if adaptor == nil {
@@ -192,6 +216,7 @@ func ImageHelper(c *gin.Context, info *relaycommon.RelayInfo) (newAPIError *type
 		logContent = append(logContent, common.NewMessage("Image count {{count}}", map[string]any{"count": imageN}))
 	}
 
+	service.VerifyCanvasImageSupplierBill(c)
 	service.PostTextConsumeQuota(c, info, usage.(*dto.Usage), logContent)
 	return nil
 }

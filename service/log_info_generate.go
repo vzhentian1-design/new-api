@@ -70,6 +70,15 @@ func AppendRelayLogAdminInfo(ctx *gin.Context, relayInfo *relaycommon.RelayInfo,
 	if ctx == nil || other == nil {
 		return
 	}
+	if IsCanvasImageRequest(ctx) {
+		if taskID := ctx.GetHeader("X-Canvas-Task-Id"); len(taskID) == 36 && !strings.ContainsAny(taskID, "\r\n") {
+			other.SetPublic("canvas_task_id", taskID)
+		}
+		other.SetPublic("image_supplier", ctx.GetString("channel_name"))
+		if charge, ok := ctx.Get("canvas_supplier_charge"); ok {
+			other.SetPublic("supplier_charge", charge)
+		}
+	}
 	other.SetAdmin("use_channel", ctx.GetStringSlice("use_channel"))
 	if relayInfo != nil {
 		if billingModel := relayInfo.GetBillingModelName(); billingModel != "" && billingModel != relayInfo.OriginModelName {

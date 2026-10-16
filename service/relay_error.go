@@ -31,6 +31,9 @@ func DecideRelayRetry(c *gin.Context, err *types.NewAPIError, retryTimes int) Po
 	if GetChannelConstraints(c).SuppressesRetry() {
 		return PolicyDecision{Action: "stop", Reason: "pinned_channel", Source: "channel_constraint"}
 	}
+	if IsCanvasImageRequest(c) {
+		return decideCanvasImageRetry(c, err, retryTimes)
+	}
 	if types.IsChannelError(err) {
 		return PolicyDecision{Action: "retry", Reason: "channel_error", Source: "system"}
 	}
@@ -65,7 +68,7 @@ func ProcessChannelError(c *gin.Context, channelError types.ChannelError, err *t
 		return
 	}
 	logger.LogError(c, common.LogText("channel error (channel #%d, status code: %d): %s", channelError.ChannelId, err.StatusCode, common.LocalLogPreview(err.MaskSensitiveErrorWithStatusCode())))
-	if ShouldDisableChannel(err) && channelError.AutoBan {
+	if !coolCanvasImageChannel(c, channelError.ChannelId, err) && ShouldDisableChannel(err) && channelError.AutoBan {
 		reason := err.MaskSensitiveErrorWithStatusCode()
 		gopool.Go(func() {
 			DisableChannel(channelError, reason)

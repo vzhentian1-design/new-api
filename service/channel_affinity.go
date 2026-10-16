@@ -547,6 +547,9 @@ func ApplyChannelAffinityOverrideTemplate(c *gin.Context, paramOverride map[stri
 }
 
 func GetPreferredChannelByAffinity(c *gin.Context, modelName string, usingGroup string) (int, bool) {
+	if IsCanvasImageRequest(c) {
+		return 0, false
+	}
 	setting := operation_setting.GetChannelAffinitySetting()
 	state := RequestPolicy(c)
 	if setting == nil || !setting.Enabled {
